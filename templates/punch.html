@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>打刻 - {{ employee_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="punch-screen">
+        <div class="punch-card">
+            <div class="employee-name">{{ employee_name }}</div>
+            <div class="current-time" id="punch-clock">--:--:--</div>
+            <div class="current-date" id="punch-date"></div>
+
+            <!-- ステータス（APIから動的に更新） -->
+            <div class="punch-status" id="status-label" style="font-weight:700;font-size:0.95rem;color:var(--primary)">
+                読み込み中...
+            </div>
+
+            <!-- シフト履歴（APIから動的に描画） -->
+            <div id="shift-history"></div>
+
+            <!-- 打刻ボタン（初期状態: 全て無効、API取得後に有効化） -->
+            <div class="punch-buttons" id="punch-buttons">
+                <button class="punch-btn punch-btn-in punch-btn-disabled" data-action="clock_in" disabled>出勤</button>
+                <button class="punch-btn punch-btn-out punch-btn-disabled" data-action="clock_out" disabled>退勤</button>
+                <button class="punch-btn punch-btn-break-start punch-btn-disabled" data-action="break_start" disabled>休憩開始</button>
+                <button class="punch-btn punch-btn-break-end punch-btn-disabled" data-action="break_end" disabled>休憩終了</button>
+            </div>
+
+            <label class="sound-toggle">
+                <input type="checkbox" id="sound-on" checked> 確認音
+            </label>
+
+            <a href="{{ url_for('employee_select') }}" style="display:inline-block;margin-top:0.8rem;color:var(--text-light);text-decoration:none;font-size:0.85rem">&larr; 従業員一覧に戻る</a>
+        </div>
+    </div>
+
+    <!-- トースト -->
+    <div class="toast-overlay" id="toast-overlay">
+        <div class="toast-content">
+            <div class="toast-icon" id="toast-icon">&#10003;</div>
+            <div class="toast-message" id="toast-message"></div>
+            <div class="toast-time" id="toast-time"></div>
+            <div class="toast-sub" id="toast-sub"></div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script>
+    /* ━━━━━ 定数 ━━━━━ */
+    var EMPLOYEE_ID = '{{ employee_id }}';
+    var STATUS_URL = '{{ url_for("api_punch_status") }}' + '?employee_id=' + EMPLOYEE_ID;
+    var ACTION_URL = '{{ url_for("punch_action") }}';
+    var SELECT_URL = '{{ url_for("employee_select") }}';
+    var currentAllowed = [];
+    var currentStatus = '';
+    var punching = false;
+
+    /* ━━━━━ 時計 ━━━━━ */
+    startClock('punch-clock', 'punch-date');
+
+    /* ━━━━━ 状態取得API ━━━━━ */
+    function fetchStatus() {
+        console.log('[punch] Fetching status:', STATUS_URL);
+        fetch(STATUS_URL)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                console.log('[punch] Status response:', data);
+                applyStatus(data);
+            })
+            .catch(function(err) {
+                console.error('[punch] Status fetch error:', err);
+                document.getElementById('status-label').textContent = '通信エラー — ページを再読み込みしてください';
+            });
+    }
+
+    function applyStatus(data) {
+        currentAllowed = data.allowed_actions || [];
+        currentStatus = data.status_label || '';
+
+        /* ステータスラベル更新 */
+        document.getElementById('status-label').textContent = currentStatus;
+
+        /* シフト履歴描画 */
+        var historyEl = document.getElementById('shift-history');
+        var shifts = data.today_shifts || [];
+        if (shifts.length > 0) {
+            var html = '<div style="background:var(--bg);border-radius:8px;padding:0.6rem 0.8rem;margin-bottom:1rem;font-size:0.8rem;text-align:left">';
+            html += '<div style="font-weight:700;margin-bottom:0.3rem;color:var(--text-light)">今日の打刻</div>';
+            for (var i = 0; i < shifts.length; i++) {
+                var s = shifts[i];
+                html += '<div style="margin-bottom:0.2rem">';
+                html += '第' + s.shift_id + 'シフト：' + (s.clock_in || '?') + '出勤';
+                if (s.break_start) html += ' → ' + s.break_start + '休憩';
+                if (s.break_end) html += ' → ' + s.break_end + '復帰';
+                if (s.clock_out) {
+                    html += ' → ' + s.clock_out + '退勤';
+                    if (s.work_hours) html += '（' + s.work_hours + 'h）';
+                } else {
+                    html += '<span style="color:var(--success);font-weight:600"> 勤務中</span>';
+                }
+                html += '</div>';
+            }
+            html += '</div>';
+            historyEl.innerHTML = html;
+        } else {
+            historyEl.innerHTML = '';
+        }
+
+        /* ボタン有効/無効 */
+        document.querySelectorAll('#punch-buttons .punch-btn').forEach(function(btn) {
+            var action = btn.getAttribute('data-action');
+            if (currentAllowed.indexOf(action) !== -1) {
+                btn.disabled = false;
+                btn.classList.remove('punch-btn-disabled');
+            } else {
+                btn.disabled = true;
+                btn.classList.add('punch-btn-disabled');
+            }
+        });
+
+        console.log('[punch] Buttons updated. Allowed:', currentAllowed);
+    }
+
+    /* ━━━━━ 打刻実行 ━━━━━ */
+    function doPunch(action) {
+        if (punching) return;
+
+        /* クライアント側チェック */
+        if (currentAllowed.indexOf(action) === -1) {
+            showToastError(getGuideMessage(action));
+            return;
+        }
+
+        punching = true;
+        setAllButtonsDisabled(true);
+
+        var form = new FormData();
+        form.append('action', action);
+
+        console.log('[punch] Sending action:', action);
+
+        fetch(ACTION_URL, { method: 'POST', body: form })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                console.log('[punch] Action response:', data);
+                if (data.success) {
+                    showToastSuccess(data.message, data.time);
+                } else {
+                    showToastError(data.message);
+                    /* 失敗時は状態を再取得 */
+                    fetchStatus();
+                }
+            })
+            .catch(function(err) {
+                console.error('[punch] Action error:', err);
+                showToastError('通信エラーが発生しました');
+            });
+    }
+
+    function getGuideMessage(action) {
+        if (action === 'clock_in') return currentStatus + 'のため出勤はできません';
+        if (action === 'clock_out') {
+            if (currentAllowed.indexOf('break_end') !== -1) return '退勤する前に休憩終了を押してください';
+            return currentStatus + 'のため退勤はできません';
+        }
+        if (action === 'break_start') return currentStatus + 'のため休憩開始はできません';
+        if (action === 'break_end') return '先に休憩開始を押してください';
+        return 'この操作はできません';
+    }
+
+    function setAllButtonsDisabled(disabled) {
+        document.querySelectorAll('#punch-buttons .punch-btn').forEach(function(b) {
+            b.disabled = disabled;
+        });
+    }
+
+    /* ━━━━━ トースト ━━━━━ */
+    function showToastSuccess(message, time) {
+        document.getElementById('toast-icon').innerHTML = '&#10003;';
+        document.getElementById('toast-icon').className = 'toast-icon';
+        document.getElementById('toast-message').textContent = message;
+        document.getElementById('toast-time').textContent = time || '';
+        document.getElementById('toast-sub').textContent = '3秒後に従業員一覧に戻ります...';
+        document.getElementById('toast-overlay').classList.add('show');
+        if (document.getElementById('sound-on').checked) playBeep();
+        setTimeout(function() { location.href = SELECT_URL; }, 3000);
+    }
+
+    function showToastError(message) {
+        document.getElementById('toast-icon').innerHTML = '&#10007;';
+        document.getElementById('toast-icon').className = 'toast-icon error';
+        document.getElementById('toast-message').textContent = message;
+        document.getElementById('toast-time').textContent = '';
+        document.getElementById('toast-sub').textContent = '';
+        document.getElementById('toast-overlay').classList.add('show');
+        setTimeout(function() {
+            document.getElementById('toast-overlay').classList.remove('show');
+            punching = false;
+            /* ボタンを状態に基づいて復元 */
+            document.querySelectorAll('#punch-buttons .punch-btn').forEach(function(btn) {
+                var action = btn.getAttribute('data-action');
+                btn.disabled = (currentAllowed.indexOf(action) === -1);
+            });
+        }, 2000);
+    }
+
+    /* ━━━━━ ボタンのonclick設定 ━━━━━ */
+    document.querySelectorAll('#punch-buttons .punch-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            doPunch(btn.getAttribute('data-action'));
+        });
+    });
+
+    /* ━━━━━ 初期化：ページロード時にAPI呼び出し ━━━━━ */
+    fetchStatus();
+
+    </script>
+</body>
+</html>

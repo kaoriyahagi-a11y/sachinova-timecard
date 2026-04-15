@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理者ログイン - Sachinova タイムカード</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="fullscreen-wrapper">
+        <div class="auth-card">
+            <h1>管理者ログイン</h1>
+            <p class="subtitle">Sachinova株式会社 タイムカード</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}{% for cat, msg in messages %}
+            <div class="flash flash-{{ cat }}">{{ msg }}</div>
+            {% endfor %}{% endif %}{% endwith %}
+
+            <form method="POST">
+                <div class="form-group">
+                    <label>メールアドレス</label>
+                    <input type="email" name="email" required placeholder="admin@sachinova.co.jp">
+                </div>
+                <div class="form-group">
+                    <label>パスワード</label>
+                    <div class="password-wrapper">
+                        <input type="password" name="password" required placeholder="パスワードを入力">
+                        <button type="button" class="password-toggle" aria-label="表示切替"></button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-login">ログイン</button>
+            </form>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}従業員編集{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:540px;margin:1rem auto">
+    <h2 class="card-title">従業員編集 — {{ employee['名前'] }}</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label>名前</label>
+            <input type="text" name="name" value="{{ employee['名前'] }}" required>
+        </div>
+        <div class="form-group">
+            <label>店舗</label>
+            <select name="store_id">
+                {% for sid, sname in stores.items() %}
+                <option value="{{ sid }}" {% if employee.get('店舗ID') == sid %}selected{% endif %}>{{ sname }}</option>
+                {% endfor %}
+                <option value="both" {% if employee.get('店舗ID') == 'both' %}selected{% endif %}>両方</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>PIN (4桁) — 空欄で変更なし</label>
+            <div class="password-wrapper">
+                <input type="password" name="pin" maxlength="4" pattern="[0-9]{4}" placeholder="変更する場合のみ入力">
+                <button type="button" class="password-toggle" aria-label="表示切替"></button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>役割</label>
+            <select name="role">
+                <option value="employee" {% if employee['役割'] == 'employee' %}selected{% endif %}>従業員</option>
+                <option value="admin" {% if employee['役割'] == 'admin' %}selected{% endif %}>管理者</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>顔写真</label>
+            {% if employee.get('写真') %}
+            <div style="margin-bottom:0.5rem">
+                <img src="{{ url_for('static', filename='photos/' + employee['写真']) }}" style="width:80px;height:80px;border-radius:50%;object-fit:cover">
+            </div>
+            {% endif %}
+            <input type="file" name="photo" accept="image/*">
+        </div>
+        <div class="form-group">
+            <label>
+                <input type="checkbox" name="active" value="1" {% if employee.get('有効','1')|string == '1' %}checked{% endif %}>
+                有効
+            </label>
+        </div>
+        <div style="display:flex;gap:0.8rem;margin-top:1rem">
+            <button type="submit" class="btn btn-primary">保存</button>
+            <a href="{{ url_for('admin_employees') }}" class="btn btn-outline">キャンセル</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

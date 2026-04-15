@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}LINE設定{% endblock %}
+
+{% block content %}
+
+<!-- ステータス -->
+<div class="card">
+    <h2 class="card-title">LINE Messaging API 設定状況</h2>
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+        <div>
+            <span style="font-size:0.8rem;color:var(--text-light)">通知機能</span><br>
+            {% if messaging_enabled %}
+            <span class="badge badge-success" style="font-size:0.85rem;padding:4px 12px">ON</span>
+            {% else %}
+            <span class="badge badge-danger" style="font-size:0.85rem;padding:4px 12px">OFF</span>
+            {% endif %}
+        </div>
+        <div>
+            <span style="font-size:0.8rem;color:var(--text-light)">アクセストークン</span><br>
+            {% if token_set %}
+            <span class="badge badge-success" style="font-size:0.85rem;padding:4px 12px">設定済み</span>
+            {% else %}
+            <span class="badge badge-danger" style="font-size:0.85rem;padding:4px 12px">未設定</span>
+            {% endif %}
+        </div>
+        <div>
+            <span style="font-size:0.8rem;color:var(--text-light)">登録済み管理者</span><br>
+            <span style="font-size:0.95rem;font-weight:700">{{ current_ids|length }}人</span>
+        </div>
+    </div>
+</div>
+
+<!-- 手順 -->
+<div class="card">
+    <h2 class="card-title">User ID取得手順</h2>
+    <div style="font-size:0.9rem;line-height:1.8">
+        <p><strong>Step 1.</strong> LINE DevelopersでMessaging APIチャンネルを作成し、チャンネルアクセストークンを発行</p>
+        <p><strong>Step 2.</strong> config.py に <code>LINE_CHANNEL_ACCESS_TOKEN</code> を設定してサーバーを再起動</p>
+        <p><strong>Step 3.</strong> LINE Developersの「Messaging API設定」でWebhook URLを設定：</p>
+        <div style="background:var(--bg);padding:0.6rem 1rem;border-radius:6px;margin:0.5rem 0;font-family:monospace;font-size:0.85rem;word-break:break-all">
+            https://あなたのドメイン/webhook/line
+        </div>
+        <p><strong>Step 4.</strong> 通知を受け取りたい管理者が、LINE公式アカウントを友だち追加</p>
+        <p><strong>Step 5.</strong> 友だち追加後、公式アカウントに<strong>何でもよいのでメッセージを送信</strong></p>
+        <p><strong>Step 6.</strong> 下の「受信したUser ID」にリアルタイムで表示されます（5秒ごとに自動更新）</p>
+        <p><strong>Step 7.</strong> 表示されたUser IDを config.py の <code>LINE_ADMIN_USER_IDS</code> に設定</p>
+    </div>
+</div>
+
+<!-- 受信済みUser ID -->
+<div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2 class="card-title" style="border:none;margin:0;padding:0">受信したUser ID</h2>
+        <div style="display:flex;gap:0.5rem">
+            <span style="font-size:0.75rem;color:var(--text-light);display:flex;align-items:center;gap:0.3rem" id="poll-status">
+                <span style="width:8px;height:8px;background:var(--success);border-radius:50%;display:inline-block"></span>
+                自動更新中
+            </span>
+            {% if received_ids %}
+            <form method="POST" action="{{ url_for('admin_clear_line_ids') }}" style="display:inline">
+                <button type="submit" class="btn btn-danger btn-sm">クリア</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="id-list">
+        {% if received_ids %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>LINE表示名</th>
+                        <th>User ID</th>
+                        <th>受信日時</th>
+                        <th>コピー</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in received_ids %}
+                    <tr>
+                        <td style="font-weight:600">{{ item.display_name or '(不明)' }}</td>
+                        <td>
+                            <code id="uid-{{ loop.index }}" style="font-size:0.8rem;word-break:break-all;background:var(--bg);padding:2px 6px;border-radius:4px">{{ item.user_id }}</code>
+                        </td>
+                        <td style="font-size:0.8rem;color:var(--text-light)">{{ item.timestamp }}</td>
+                        <td>
+                            <button onclick="copyUid('uid-{{ loop.index }}')" class="btn btn-primary btn-sm">コピー</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- config.py用のまとめコピー -->
+        <div style="margin-top:1rem;background:var(--bg);padding:1rem;border-radius:8px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+                <span style="font-size:0.8rem;font-weight:600;color:var(--text-light)">config.py に貼り付ける値：</span>
+                <button onclick="copyConfigValue()" class="btn btn-primary btn-sm">まとめてコピー</button>
+            </div>
+            <code id="config-value" style="font-size:0.85rem;word-break:break-all;display:block">LINE_ADMIN_USER_IDS = [{% for item in received_ids %}"{{ item.user_id }}"{% if not loop.last %}, {% endif %}{% endfor %}]</code>
+        </div>
+        {% else %}
+        <div style="text-align:center;padding:2.5rem;color:var(--text-light)" id="empty-msg">
+            <div style="font-size:2rem;margin-bottom:0.5rem">📱</div>
+            <p>LINE公式アカウントにメッセージを送信してください</p>
+            <p style="font-size:0.8rem;margin-top:0.3rem">Webhookで受信したUser IDがここに表示されます</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- テスト通知 -->
+<div class="card">
+    <h2 class="card-title">テスト通知</h2>
+    <p style="font-size:0.9rem;color:var(--text-light);margin-bottom:1rem">
+        config.py にUser IDとトークンを設定後、テスト通知を送信して動作確認できます。
+    </p>
+    <form method="POST" action="{{ url_for('admin_line_test') }}">
+        <button type="submit" class="btn btn-primary">テスト通知を送信</button>
+    </form>
+</div>
+
+<!-- 現在の設定済みUser ID -->
+{% if current_ids %}
+<div class="card">
+    <h2 class="card-title">config.py に設定済みのUser ID</h2>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>User ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for uid in current_ids %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td><code style="font-size:0.8rem;background:var(--bg);padding:2px 6px;border-radius:4px">{{ uid }}</code></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyUid(elId) {
+    const text = document.getElementById(elId).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = 'OK!';
+        btn.style.background = 'var(--success)';
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1500);
+    });
+}
+
+function copyConfigValue() {
+    const text = document.getElementById('config-value').textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = 'コピーしました!';
+        btn.style.background = 'var(--success)';
+        setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 2000);
+    });
+}
+
+// 5秒ごとにポーリングして新しいUser IDを検出
+let knownCount = {{ received_ids|length }};
+
+setInterval(function() {
+    fetch('{{ url_for("api_line_ids") }}')
+        .then(r => r.json())
+        .then(data => {
+            if (data.length > knownCount) {
+                // 新しいIDが来た → ページリロードで反映
+                location.reload();
+            }
+        })
+        .catch(() => {});
+}, 5000);
+</script>
+{% endblock %}

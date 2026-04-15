@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}月次レポート{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="report-header">
+        <h2 class="card-title" style="border:none;margin:0;padding:0">{{ year }}年{{ month }}月 レポート</h2>
+        <div class="month-nav">
+            {% set prev_month = month - 1 if month > 1 else 12 %}
+            {% set prev_year = year if month > 1 else year - 1 %}
+            {% set next_month = month + 1 if month < 12 else 1 %}
+            {% set next_year = year if month < 12 else year + 1 %}
+            <a href="{{ url_for('admin_report', year=prev_year, month=prev_month, store=store_filter) }}">&larr; 前月</a>
+            <a href="{{ url_for('admin_report', store=store_filter) }}">今月</a>
+            <a href="{{ url_for('admin_report', year=next_year, month=next_month, store=store_filter) }}">翌月 &rarr;</a>
+        </div>
+    </div>
+
+    <!-- 店舗フィルタ -->
+    <div class="filter-bar" style="margin-top:1rem">
+        <a href="{{ url_for('admin_report', year=year, month=month, store='all') }}"
+           class="filter-pill {% if store_filter == 'all' %}active{% endif %}">全店舗</a>
+        {% for sid, sname in stores.items() %}
+        <a href="{{ url_for('admin_report', year=year, month=month, store=sid) }}"
+           class="filter-pill {% if store_filter == sid %}active{% endif %}">{{ sname }}</a>
+        {% endfor %}
+    </div>
+
+    <div class="summary-cards">
+        <div class="summary-card">
+            <div class="num">{{ work_days }}</div>
+            <div class="unit">出勤日数</div>
+        </div>
+        <div class="summary-card">
+            <div class="num">{{ total_work }}</div>
+            <div class="unit">総勤務時間</div>
+        </div>
+        <div class="summary-card">
+            <div class="num">{{ total_break }}</div>
+            <div class="unit">総休憩時間</div>
+        </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:0.5rem;margin-bottom:1rem;flex-wrap:wrap">
+        <a href="{{ url_for('admin_report_csv', year=year, month=month, store=store_filter) }}" class="btn btn-primary btn-sm">CSV出力</a>
+        <a href="{{ url_for('admin_mf_csv', year=year, month=month, store=store_filter) }}" class="btn btn-purple btn-sm">MF給与CSV</a>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>従業員</th>
+                    <th>店舗</th>
+                    <th>日付</th>
+                    <th>出勤</th>
+                    <th>退勤</th>
+                    <th>休憩開始</th>
+                    <th>休憩終了</th>
+                    <th>勤務時間</th>
+                    <th>休憩時間</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in records %}
+                <tr>
+                    <td>{{ r.get('従業員名', '') }}</td>
+                    <td>{{ stores.get(r.get('店舗ID',''), r.get('店舗ID','')) }}</td>
+                    <td>{{ r.get('日付', '') }}</td>
+                    <td>{{ r.get('出勤', '-') }}</td>
+                    <td>{{ r.get('退勤', '-') }}</td>
+                    <td>{{ r.get('休憩開始', '-') }}</td>
+                    <td>{{ r.get('休憩終了', '-') }}</td>
+                    <td>{{ r.get('勤務時間', '-') }}</td>
+                    <td>{{ r.get('休憩時間', '-') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="9" style="text-align:center;color:var(--text-light);padding:2rem">この月の記録はありません</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

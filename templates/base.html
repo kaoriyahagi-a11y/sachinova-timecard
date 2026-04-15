@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}管理{% endblock %} - Sachinova タイムカード</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <div>
+                <div class="company">Sachinova株式会社</div>
+                管理者パネル
+            </div>
+        </div>
+        <div class="navbar-nav">
+            <span class="user-info">{{ session.admin_name }}</span>
+            <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint == 'admin_dashboard' %}active{% endif %}">ダッシュボード</a>
+            <a href="{{ url_for('admin_employees') }}" class="{% if request.endpoint in ['admin_employees','admin_edit_employee','admin_records'] %}active{% endif %}">従業員</a>
+            <a href="{{ url_for('admin_alerts') }}" class="{% if request.endpoint == 'admin_alerts' %}active{% endif %}">要確認</a>
+            <a href="{{ url_for('admin_report') }}" class="{% if request.endpoint == 'admin_report' %}active{% endif %}">レポート</a>
+            <a href="{{ url_for('admin_line_setup') }}" class="{% if request.endpoint == 'admin_line_setup' %}active{% endif %}">LINE設定</a>
+            <a href="{{ url_for('admin_logout') }}">ログアウト</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for cat, msg in messages %}
+        <div class="flash flash-{{ cat }}">{{ msg }}</div>
+        {% endfor %}{% endif %}{% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

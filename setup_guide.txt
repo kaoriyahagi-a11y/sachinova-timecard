@@ -1,0 +1,329 @@
+=============================================
+ Sachinova株式会社 タイムカードシステム
+ セットアップガイド v2.0
+=============================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【1. Google Cloud設定】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Google Cloud Console (https://console.cloud.google.com/) にアクセス
+2. 新しいプロジェクトを作成
+3. 「APIとサービス」→「ライブラリ」から以下を有効化:
+   - Google Sheets API
+   - Google Drive API
+4. 「APIとサービス」→「認証情報」→「サービスアカウントを作成」
+5. サービスアカウントのキー(JSON)をダウンロード
+6. ダウンロードしたJSONファイルを「credentials.json」にリネームして
+   sachinova-timecardフォルダに配置
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【2. インストール】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  cd C:\Users\orika\sachinova-timecard
+  pip install -r requirements.txt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【3. 起動】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  python app.py
+
+起動時にAPSchedulerが自動で開始されます。
+  - 退勤忘れチェック: 毎日 22:00
+  - 自動バックアップ: 毎日 02:00
+  - 月次リマインド: 毎月25日・月末 10:00
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【4. アクセス方法】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 従業員用: http://localhost:5000
+  1. 店舗を選択（清澄白河店 / 曳舟店）
+  2. 店舗パスワードを入力:
+     - 清澄白河店: kiyosumi2026
+     - 曳舟店: hikifune2026
+  3. 従業員タイルをタップ
+  4. 4桁PIN入力（デフォルト: 0000）
+  5. 打刻ボタンをタップ → 3秒後に一覧へ自動復帰
+
+■ 管理者用: http://localhost:5000/admin
+  メール: admin@sachinova.co.jp
+  パスワード: admin123
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【5. 画面遷移】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[従業員フロー]
+  店舗選択 → 店舗パスワード → 従業員タイル → PIN入力 → 打刻 → 自動復帰
+
+  ※ 店舗パスワードは1日1回（毎朝AM4:00にリセット）
+  ※ PIN認証は毎回必要
+
+[管理者フロー]
+  /admin → ログイン → ダッシュボード → 従業員管理 / 要確認 / レポート
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【6. LINE Messaging API設定】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ LINE Developersでの準備
+
+1. LINE Developers（https://developers.line.biz/ja/）にログイン
+2. プロバイダーを作成（「Sachinova」など）
+3. 「Messaging API」チャンネルを作成
+4. チャンネル設定ページで:
+   a. 「Messaging API設定」タブ
+   b. 「チャンネルアクセストークン（長期）」を発行 → コピー
+5. LINE公式アカウントをQRコードで友だち追加（管理者全員）
+
+■ Webhookの設定（User ID取得用）
+
+1. LINE DevelopersのWebhook URL欄に以下を設定:
+   https://あなたのドメイン/webhook/line
+   ※ ngrokなどでローカルを公開するか、本番サーバーのURLを使用
+
+2. Webhookを「利用する」に変更
+
+3. 管理画面のナビバーから「LINE設定」ページを開く
+   （http://localhost:5000/admin/line-setup）
+
+4. 通知を受け取りたい管理者が、LINE公式アカウントを友だち追加し、
+   何でもよいのでメッセージを送信
+
+5. LINE設定ページに5秒以内にUser IDが表示される
+   （LINE表示名 + User ID + 受信日時）
+
+6. 「まとめてコピー」ボタンでconfig.py用の値をクリップボードに取得
+
+7. config.pyのLINE_ADMIN_USER_IDSに貼り付け
+
+■ config.py の設定
+
+  LINE_MESSAGING_ENABLED = True
+  LINE_CHANNEL_ACCESS_TOKEN = "ここにトークンを貼り付け"
+  LINE_ADMIN_USER_IDS = ["U1234...", "U5678..."]
+
+  または環境変数で設定:
+  LINE_MESSAGING_ENABLED=true
+  LINE_CHANNEL_ACCESS_TOKEN=xxxxxxxx
+  LINE_ADMIN_USER_IDS=U1234,U5678
+
+■ テスト通知
+
+  管理画面のダッシュボードにある「LINE テスト通知」ボタンを押して
+  動作確認してください。
+
+■ 通知の種類（個別ON/OFF可能）
+
+  forgot_clock_out  : 退勤忘れアラート（毎日22:00）
+  late_night_punch  : 深夜異常打刻（AM2-5時の打刻）
+  pin_failure       : PIN5回連続ミス（10分ロック）
+  monthly_reminder  : 月次締めリマインド（25日・月末）
+  backup_failure    : バックアップ失敗通知
+  new_employee_first: 新規従業員の初打刻
+
+  ※ 通常の出退勤では通知を送りません（月間通知数を抑制）
+  ※ config.py の LINE_NOTIFY_SETTINGS で個別に制御可能
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【7. パスワード変更方法】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 店舗パスワード
+  config.py の STORE_PASSWORDS を変更
+  例: "kiyosumi": "新パスワード"
+
+■ 管理者パスワード
+  config.py の DEFAULT_ADMIN_PASSWORD を変更
+  ※ 既に初回起動済みの場合はスプレッドシートの
+    従業員シートのパスワード列を直接更新する必要あり
+
+■ 従業員PIN
+  管理画面の「従業員管理」→「編集」から変更可能
+
+■ セッションシークレット
+  config.py の SECRET_KEY を十分にランダムな値に変更
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【8. 既存データ移行（PIN初期化）】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+既存のスプレッドシートからアップグレードする場合:
+
+1. 従業員シートに「店舗ID」「PIN」「写真」「有効」列がなければ
+   初回起動時に自動作成されます
+
+2. 既存従業員のPINは平文の場合も自動で認識されます
+   （ハッシュ化されていない「0000」などでもログイン可能）
+
+3. 管理画面から各従業員のPINを再設定すると、
+   自動的にハッシュ化されて保存されます
+
+4. 打刻記録シートに「要確認」列が追加されます
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【9. APScheduler タイムゾーン設定】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+デフォルトは Asia/Tokyo です。
+変更する場合は config.py の TIMEZONE を編集:
+
+  TIMEZONE = "Asia/Tokyo"
+
+全スケジュールジョブ（退勤忘れチェック、バックアップ、リマインド）
+がこのタイムゾーンで実行されます。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【10. 自動バックアップの確認】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 動作確認
+
+1. python app.py で起動
+2. コンソールに「[scheduler] APScheduler起動完了」が表示されることを確認
+3. Google Driveを確認し、翌日 02:00 以降に
+   「Sachinova_タイムカード_backup_YYYYMMDD」
+   というスプレッドシートが作成されていればOK
+
+■ 手動テスト（Pythonシェル）
+
+  python -c "import sheets_manager; print(sheets_manager.create_backup())"
+
+■ バックアップの無効化
+
+  config.py の BACKUP_ENABLED = False に変更
+
+■ 保持期間
+
+  config.py の BACKUP_RETENTION_DAYS = 30 （デフォルト30日）
+  これより古いバックアップは毎日2:00に自動削除されます
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【11. 打刻ルールと打刻履歴編集】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 打刻ステートマシン
+
+  未出勤 → 出勤のみ可能
+  勤務中 → 退勤 or 休憩開始のみ可能
+  休憩中 → 休憩終了のみ可能（退勤は不可）
+  退勤済み → 出勤ボタンのみ有効（ダブルシフト開始）
+
+  ※ UI上で不可能な操作のボタンはグレーアウトされます
+  ※ サーバー側でも二重チェックしています
+
+■ ダブルシフト（1日複数回勤務）
+
+  - 退勤後に再度「出勤」を押すと第2シフトが開始されます
+  - 前のシフトの退勤から15分以上経過が必要です
+  - 打刻画面に全シフトの履歴が表示されます
+  - 月次集計では同日の全シフトの勤務時間を合算します
+
+■ 打刻履歴の編集（管理者機能）
+
+  打刻ミスや退勤忘れの修正手順:
+  1. 管理画面 → 従業員一覧 → 対象者の「履歴」ボタン
+  2. 打刻一覧が新しい順に表示されます
+  3. 各レコードの出勤/退勤/休憩開始/休憩終了を直接編集
+     → 「保存」ボタンで反映（勤務時間は自動再計算）
+  4. 誤った打刻は「削除」ボタンで完全削除
+  5. 手動で打刻を追加する場合は上部のフォームから日付・時刻を入力
+
+  ※ 「要確認」タブに退勤忘れの候補が一覧表示されます
+  ※ 確認後「解除」ボタンでフラグを外せます
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【12. セキュリティチェックリスト】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+本番運用前に以下を必ず変更してください:
+
+  □ config.py の SECRET_KEY をランダムな長い文字列に変更
+  □ STORE_PASSWORDS を安全なパスワードに変更
+  □ DEFAULT_ADMIN_PASSWORD を変更
+  □ 各従業員のPINを管理画面から個別に設定
+  □ Google credentials.json をGit管理に含めない（.gitignoreに追加）
+  □ LINE_CHANNEL_ACCESS_TOKEN を環境変数で管理
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【13. Renderへのデプロイ手順】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+■ 事前準備
+
+1. GitHubにリポジトリを作成し、コードをpush
+   ※ credentials.json は .gitignore で除外済み
+
+2. credentials.json の中身をテキストとしてコピーしておく
+
+■ Renderでのセットアップ
+
+1. https://render.com でアカウント作成（GitHub連携）
+2. 「New」→「Web Service」→ リポジトリを選択
+3. 設定:
+   - Name: sachinova-timecard
+   - Runtime: Python
+   - Build Command: pip install -r requirements.txt
+   - Start Command: gunicorn app:app -c gunicorn.conf.py
+
+4. 「Environment」タブで環境変数を設定:
+
+   GOOGLE_CREDENTIALS_JSON = （credentials.jsonの中身を丸ごと貼り付け）
+   SECRET_KEY             = （自動生成 or ランダム文字列）
+   STORE_PW_KIYOSUMI      = kiyosumi2026（本番用に変更）
+   STORE_PW_HIKIFUNE      = hikifune2026（本番用に変更）
+   LINE_MESSAGING_ENABLED = false（LINE設定後にtrueに変更）
+   BACKUP_ENABLED         = true
+
+5. 「Create Web Service」でデプロイ開始
+
+■ デプロイ後の確認
+
+1. 表示されたURL（例: https://sachinova-timecard.onrender.com）にアクセス
+2. 店舗選択画面が表示されればOK
+3. /admin にアクセスして管理者ログイン確認
+4. 店舗タブレットのブラウザにURLをブックマーク
+
+■ 注意事項
+
+- Render無料プランは15分間アクセスがないとスリープ
+  → 有料プラン（$7/月〜）で常時稼働推奨
+- Google Sheetsのサービスアカウントに
+  スプレッドシートの編集権限を付与してください
+- LINE Webhookを使う場合はRenderのURLを
+  LINE DevelopersのWebhook URLに設定
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【14. ファイル構成】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  sachinova-timecard/
+  ├── app.py              ... Flaskメインアプリ
+  ├── config.py           ... 全設定
+  ├── sheets_manager.py   ... Google Sheets操作 + キャッシュ
+  ├── line_notifier.py    ... LINE Messaging API通知
+  ├── scheduler.py        ... APSchedulerジョブ
+  ├── credentials.json    ... Google認証情報（※Git管理外）
+  ├── requirements.txt    ... Pythonパッケージ
+  ├── setup_guide.txt     ... このファイル
+  ├── static/
+  │   ├── style.css       ... スタイルシート
+  │   ├── app.js          ... 共通JavaScript
+  │   └── photos/         ... 従業員写真
+  └── templates/
+      ├── store_select.html
+      ├── store_password.html
+      ├── employee_select.html
+      ├── pin_entry.html
+      ├── punch.html
+      ├── admin_login.html
+      ├── base.html (管理者用レイアウト)
+      ├── admin_dashboard.html
+      ├── admin_employees.html
+      ├── admin_edit_employee.html
+      ├── admin_records.html
+      ├── admin_alerts.html
+      └── admin_report.html

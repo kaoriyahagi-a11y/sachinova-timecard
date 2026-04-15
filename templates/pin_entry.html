@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIN入力 - {{ employee['名前'] }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="pin-screen">
+        <div class="pin-card">
+            <div class="employee-name">{{ employee['名前'] }}</div>
+
+            <div class="pin-display-wrapper">
+                <div id="pin-dots" class="pin-dots">
+                    <div class="pin-dot" id="dot0"></div>
+                    <div class="pin-dot" id="dot1"></div>
+                    <div class="pin-dot" id="dot2"></div>
+                    <div class="pin-dot" id="dot3"></div>
+                </div>
+                <div id="pin-text" class="pin-text" style="display:none">
+                    <span class="digit" id="digit0">-</span>
+                    <span class="digit" id="digit1">-</span>
+                    <span class="digit" id="digit2">-</span>
+                    <span class="digit" id="digit3">-</span>
+                </div>
+                <button type="button" class="pin-visibility-toggle" id="pin-vis-toggle" aria-label="PIN表示切替"></button>
+            </div>
+
+            <div class="pin-error" id="pin-error">{% if locked %}PINがロックされています。しばらくお待ちください{% endif %}</div>
+
+            <div class="keypad">
+                <button class="key" onclick="pressKey('1')">1</button>
+                <button class="key" onclick="pressKey('2')">2</button>
+                <button class="key" onclick="pressKey('3')">3</button>
+                <button class="key" onclick="pressKey('4')">4</button>
+                <button class="key" onclick="pressKey('5')">5</button>
+                <button class="key" onclick="pressKey('6')">6</button>
+                <button class="key" onclick="pressKey('7')">7</button>
+                <button class="key" onclick="pressKey('8')">8</button>
+                <button class="key" onclick="pressKey('9')">9</button>
+                <button class="key key-action" onclick="clearPin()">クリア</button>
+                <button class="key" onclick="pressKey('0')">0</button>
+                <button class="key key-action" onclick="location.href='{{ url_for("employee_select") }}'">戻る</button>
+            </div>
+
+            <a href="{{ url_for('employee_select') }}" class="pin-back-link">&larr; 従業員一覧に戻る</a>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script>
+    let pin = '';
+    let pinVisible = false;
+    const visToggle = document.getElementById('pin-vis-toggle');
+    visToggle.innerHTML = EYE_CLOSED;
+
+    visToggle.addEventListener('click', function() {
+        pinVisible = !pinVisible;
+        visToggle.innerHTML = pinVisible ? EYE_OPEN : EYE_CLOSED;
+        document.getElementById('pin-dots').style.display = pinVisible ? 'none' : 'flex';
+        document.getElementById('pin-text').style.display = pinVisible ? 'flex' : 'none';
+        updateDisplay();
+    });
+
+    function updateDisplay() {
+        for (let i = 0; i < 4; i++) {
+            document.getElementById('dot' + i).classList.toggle('filled', i < pin.length);
+            document.getElementById('digit' + i).textContent = i < pin.length ? pin[i] : '-';
+        }
+    }
+
+    function pressKey(num) {
+        if (pin.length >= 4) return;
+        pin += num;
+        document.getElementById('pin-error').textContent = '';
+        updateDisplay();
+        if (pin.length === 4) verifyPin();
+    }
+
+    function clearPin() {
+        pin = '';
+        document.getElementById('pin-error').textContent = '';
+        updateDisplay();
+    }
+
+    function verifyPin() {
+        const form = new FormData();
+        form.append('pin', pin);
+        fetch('{{ url_for("pin_verify", employee_id=employee["ID"]) }}', { method: 'POST', body: form })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    location.href = '{{ url_for("punch") }}';
+                } else {
+                    document.getElementById('pin-error').textContent = data.message || 'PINが正しくありません';
+                    pin = '';
+                    updateDisplay();
+                }
+            })
+            .catch(() => {
+                document.getElementById('pin-error').textContent = '通信エラーが発生しました';
+                pin = '';
+                updateDisplay();
+            });
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}出勤状況ダッシュボード{% endblock %}
+
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <h2 style="font-size:1.2rem;font-weight:700">出勤状況ダッシュボード</h2>
+    <div style="display:flex;gap:0.5rem;align-items:center">
+        <a href="{{ url_for('admin_line_setup') }}" class="btn btn-sm btn-outline">LINE設定</a>
+        <span style="font-size:0.8rem;color:var(--text-light)" id="last-update">自動更新: 30秒ごと</span>
+    </div>
+</div>
+
+<div class="dashboard-grid" id="dashboard-container">
+    {% for sid, data in dashboard.items() %}
+    <div class="store-panel">
+        <div class="store-panel-header">{{ data.name }}</div>
+        <div class="store-panel-body">
+            <div class="stat-row">
+                <div class="stat-box working">
+                    <div class="num">{{ data.working|length }}</div>
+                    <div class="label">勤務中</div>
+                </div>
+                <div class="stat-box on-break">
+                    <div class="num">{{ data.on_break|length }}</div>
+                    <div class="label">休憩中</div>
+                </div>
+                <div class="stat-box not-in">
+                    <div class="num">{{ data.not_in|length }}</div>
+                    <div class="label">未出勤</div>
+                </div>
+            </div>
+
+            {% if data.working %}
+            <h4 style="font-size:0.8rem;color:var(--success);margin:0.5rem 0 0.3rem">勤務中</h4>
+            <ul class="worker-list">
+                {% for w in data.working %}
+                <li class="worker-item">
+                    <span class="worker-name">{{ w.name }}</span>
+                    <span class="worker-time">{{ w.clock_in }}〜 ({{ w.elapsed }})</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if data.on_break %}
+            <h4 style="font-size:0.8rem;color:var(--warning);margin:0.5rem 0 0.3rem">休憩中</h4>
+            <ul class="worker-list">
+                {% for w in data.on_break %}
+                <li class="worker-item">
+                    <span class="worker-name">{{ w.name }}</span>
+                    <span class="worker-time">出勤 {{ w.clock_in }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if data.done %}
+            <h4 style="font-size:0.8rem;color:var(--primary);margin:0.5rem 0 0.3rem">退勤済</h4>
+            <ul class="worker-list">
+                {% for w in data.done %}
+                <li class="worker-item">
+                    <span class="worker-name">{{ w.name }}</span>
+                    <span class="worker-time">{{ w.clock_in }}〜{{ w.clock_out }} ({{ w.hours }}h){% if w.shift_count and w.shift_count > 1 %} [{{ w.shift_count }}シフト]{% endif %}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+setInterval(function() {
+    fetch('{{ url_for("api_admin_dashboard") }}')
+        .then(r => r.json())
+        .then(data => {
+            // ページを丸ごとリロードする簡易実装
+            location.reload();
+        })
+        .catch(() => {});
+}, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}従業員管理{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="card-title">従業員追加</h2>
+    <form method="POST" action="{{ url_for('admin_add_employee') }}" class="add-form">
+        <div class="form-group">
+            <label>名前</label>
+            <input type="text" name="name" required placeholder="山田太郎">
+        </div>
+        <div class="form-group">
+            <label>メール</label>
+            <input type="email" name="email" required placeholder="taro@sachinova.co.jp">
+        </div>
+        <div class="form-group">
+            <label>パスワード</label>
+            <div class="password-wrapper">
+                <input type="password" name="password" required placeholder="初期パスワード">
+                <button type="button" class="password-toggle" aria-label="表示切替"></button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>PIN (4桁)</label>
+            <div class="password-wrapper">
+                <input type="password" name="pin" value="0000" maxlength="4" pattern="[0-9]{4}">
+                <button type="button" class="password-toggle" aria-label="表示切替"></button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>店舗</label>
+            <select name="store_id">
+                {% for sid, sname in stores.items() %}
+                <option value="{{ sid }}">{{ sname }}</option>
+                {% endfor %}
+                <option value="both">両方</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>役割</label>
+            <select name="role">
+                <option value="employee">従業員</option>
+                <option value="admin">管理者</option>
+            </select>
+        </div>
+        <button type="submit" class="btn btn-primary">追加</button>
+    </form>
+</div>
+
+<div class="card">
+    <h2 class="card-title">従業員一覧</h2>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>名前</th>
+                    <th>メール</th>
+                    <th>店舗</th>
+                    <th>役割</th>
+                    <th>状態</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for emp in employees %}
+                <tr>
+                    <td>{{ emp['ID'] }}</td>
+                    <td>{{ emp['名前'] }}</td>
+                    <td>{{ emp['メール'] }}</td>
+                    <td>{{ stores.get(emp.get('店舗ID',''), emp.get('店舗ID','')) }}{% if emp.get('店舗ID') == 'both' %}両方{% endif %}</td>
+                    <td>{{ '管理者' if emp['役割'] == 'admin' else '従業員' }}</td>
+                    <td>
+                        {% if emp.get('有効','1')|string == '1' %}
+                        <span class="badge badge-success">有効</span>
+                        {% else %}
+                        <span class="badge badge-danger">無効</span>
+                        {% endif %}
+                    </td>
+                    <td style="white-space:nowrap">
+                        <a href="{{ url_for('admin_edit_employee', eid=emp['ID']) }}" class="btn btn-primary btn-sm">編集</a>
+                        <a href="{{ url_for('admin_records', eid=emp['ID']) }}" class="btn btn-warning btn-sm" style="color:white">履歴</a>
+                        {% if emp['ID']|string != session.admin_id %}
+                        <form method="POST" action="{{ url_for('admin_delete_employee', eid=emp['ID']) }}" style="display:inline" onsubmit="return confirm('本当に削除しますか？')">
+                            <button type="submit" class="btn btn-danger btn-sm">削除</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

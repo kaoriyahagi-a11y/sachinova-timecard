@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ store_name }} - 従業員選択</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="header-bar">
+        <div class="brand">
+            <small>Sachinova株式会社</small>
+            {{ store_name }}
+        </div>
+        <div class="clock" id="header-clock">--:--</div>
+    </div>
+
+    <div class="employee-grid">
+        {% for emp in employees %}
+        <a href="{{ url_for('pin_entry', employee_id=emp['ID']) }}" class="employee-tile">
+            {% set st = emp.get('_status', 'none') %}
+            <span class="status-badge status-{{ st }}">
+                {% if st == 'working' %}勤務中{% elif st == 'break' %}休憩中{% elif st == 'shift_done' %}退勤済{% else %}未出勤{% endif %}
+            </span>
+            <div class="avatar">
+                {% if emp.get('写真') %}
+                <img src="{{ url_for('static', filename='photos/' + emp['写真']) }}" alt="">
+                {% else %}
+                {{ emp['名前'][:1] }}
+                {% endif %}
+            </div>
+            <div class="name">{{ emp['名前'] }}</div>
+        </a>
+        {% else %}
+        <div style="grid-column:1/-1;text-align:center;padding:3rem;color:var(--text-light)">
+            この店舗に登録されている従業員がいません
+        </div>
+        {% endfor %}
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <script>startClock('header-clock');</script>
+</body>
+</html>

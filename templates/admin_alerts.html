@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}要確認{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2 class="card-title">要確認 — 退勤忘れ・打刻異常</h2>
+
+    {% if records %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>従業員名</th>
+                    <th>店舗</th>
+                    <th>日付</th>
+                    <th>出勤</th>
+                    <th>退勤</th>
+                    <th>フラグ</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rec in records %}
+                <tr>
+                    <td>{{ rec.get('従業員名', '') }}</td>
+                    <td>{{ stores.get(rec.get('店舗ID',''), rec.get('店舗ID','')) }}</td>
+                    <td>{{ rec.get('日付', '') }}</td>
+                    <td>{{ rec.get('出勤', '-') }}</td>
+                    <td>{{ rec.get('退勤', '-') }}</td>
+                    <td><span class="badge badge-warning">{{ rec.get('要確認', '') }}</span></td>
+                    <td>
+                        <form method="POST" action="{{ url_for('admin_resolve_alert', row_num=rec['_row']) }}" style="display:inline">
+                            <button type="submit" class="btn btn-success btn-sm">解除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:3rem;color:var(--text-light)">
+        要確認の打刻はありません
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

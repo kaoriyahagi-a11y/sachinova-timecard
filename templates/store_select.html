@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>店舗選択 - Sachinova タイムカード</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="fullscreen-wrapper">
+        <div style="text-align:center">
+            <h1 style="color:white;font-size:1.6rem;margin-bottom:0.3rem">タイムカード</h1>
+            <p style="color:rgba(255,255,255,0.8);margin-bottom:2rem;font-size:0.95rem">Sachinova株式会社 — 店舗を選択してください</p>
+            <div class="store-cards">
+                {% for sid, sname in stores.items() %}
+                <a href="{{ url_for('store_password', store_id=sid) }}" class="store-card">
+                    <div class="icon">{% if 'kiyosumi' in sid %}🏪{% else %}🏬{% endif %}</div>
+                    <div class="name">{{ sname }}</div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
