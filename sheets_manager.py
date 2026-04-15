@@ -4,7 +4,16 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 import time as _time
+import pytz
 import config
+
+# タイムゾーン対応: Render等UTCサーバーでも日本時間を使う
+_JST = pytz.timezone(config.TIMEZONE)
+
+
+def _now():
+    """常に日本時間のdatetimeを返す"""
+    return datetime.now(_JST)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -28,7 +37,7 @@ def _emp_cache_valid():
 
 
 def _today_cache_valid():
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _now().strftime("%Y-%m-%d")
     return (
         _today_records_cache["data"] is not None
         and _today_records_cache["date"] == today
@@ -102,7 +111,7 @@ def _ensure_sheets(ss):
         ws.append_row([
             "ID", "名前", "メール", "パスワード", "役割",
             "店舗ID", "PIN", "写真", "有効", "作成日",
-        ])
+        ], value_input_option='RAW')
         ws.append_row([
             "1",
             config.DEFAULT_ADMIN_NAME,
@@ -113,8 +122,8 @@ def _ensure_sheets(ss):
             generate_password_hash("0000"),
             "",
             "1",
-            datetime.now().strftime("%Y-%m-%d %H:%M"),
-        ])
+            _now().strftime("%Y-%m-%d %H:%M"),
+        ], value_input_option='RAW')
 
     if "打刻記録" not in names:
         ws = ss.add_worksheet(title="打刻記録", rows=5000, cols=12)
@@ -122,7 +131,7 @@ def _ensure_sheets(ss):
             "ID", "従業員ID", "従業員名", "店舗ID", "日付",
             "出勤", "退勤", "休憩開始", "休憩終了",
             "勤務時間", "休憩時間", "要確認",
-        ])
+        ], value_input_option='RAW')
 
     if "Sheet1" in names:
         try:
@@ -205,8 +214,8 @@ def add_employee(name, email, password, role="employee", store_id="kiyosumi", pi
         role, store_id,
         generate_password_hash(pin),
         "", "1",
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-    ])
+        _now().strftime("%Y-%m-%d %H:%M"),
+    ], value_input_option='RAW')
     clear_employee_cache()
     return new_id
 
@@ -234,7 +243,7 @@ def update_employee(eid, *, name=None, store_id=None, pin=None, role=None, photo
                 updates.append({"row": i + 1, "col": 9, "val": str(active)})
             if updates:
                 cells = [gspread.Cell(u["row"], u["col"], u["val"]) for u in updates]
-                ws.update_cells(cells)
+                ws.update_cells(cells, value_input_option='RAW')
             clear_employee_cache()
             return True
     return False
@@ -265,7 +274,7 @@ def get_today_records():
     ss = get_spreadsheet()
     ws = ss.worksheet("打刻記録")
     all_vals = ws.get_all_values()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _now().strftime("%Y-%m-%d")
     headers = all_vals[0] if all_vals else []
     results = []
     for row in all_vals[1:]:
@@ -356,7 +365,7 @@ def _find_active_shift_row(eid):
     ss = get_spreadsheet()
     ws = ss.worksheet("打刻記録")
     all_vals = ws.get_all_values()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _now().strftime("%Y-%m-%d")
     # 逆順走査で最新のものを見つける
     for i in range(len(all_vals) - 1, 0, -1):
         row = all_vals[i]
@@ -389,7 +398,7 @@ def clock_in(eid, emp_name, store_id):
             # インターバルチェック
             try:
                 last_out = datetime.strptime(last["退勤"], "%H:%M")
-                now = datetime.now()
+                now = _now()
                 now_hm = now.replace(second=0, microsecond=0)
                 last_out_dt = now_hm.replace(hour=last_out.hour, minute=last_out.minute)
                 diff_min = (now_hm - last_out_dt).total_seconds() / 60
@@ -401,14 +410,14 @@ def clock_in(eid, emp_name, store_id):
 
     ss = get_spreadsheet()
     ws = ss.worksheet("打刻記録")
-    now = datetime.now()
+    now = _now()
     ws.append_row([
         now.strftime("%Y%m%d%H%M%S"),
         str(eid), emp_name, store_id,
         now.strftime("%Y-%m-%d"),
         now.strftime("%H:%M"),
         "", "", "", "", "", "",
-    ])
+    ], value_input_option='RAW')
     clear_today_cache()
     return now.strftime("%H:%M"), None
 
@@ -425,7 +434,7 @@ def clock_out(eid):
     if row[6]:
         return None, "既に退勤打刻済みです", None
 
-    now = datetime.now()
+    now = _now()
     time_str = now.strftime("%H:%M")
 
     clock_in_t = datetime.strptime(row[5], "%H:%M")
@@ -451,7 +460,7 @@ def clock_out(eid):
         gspread.Cell(row_num, 10, f"{work_hours:.2f}"),
         gspread.Cell(row_num, 11, f"{break_hours:.2f}"),
     ]
-    ws.update_cells(cells)
+    ws.update_cells(cells, value_input_option='RAW')
     clear_today_cache()
     return time_str, None, f"{work_hours:.1f}時間"
 
@@ -468,7 +477,7 @@ def break_start(eid):
     if row[7]:
         return None, "既に休憩開始済みです"
 
-    now = datetime.now()
+    now = _now()
     time_str = now.strftime("%H:%M")
     clock_in_t = datetime.strptime(row[5], "%H:%M")
     if datetime.strptime(time_str, "%H:%M") <= clock_in_t:
@@ -489,7 +498,7 @@ def break_end(eid):
     if row[8]:
         return None, "既に休憩終了済みです"
 
-    now = datetime.now()
+    now = _now()
     time_str = now.strftime("%H:%M")
     break_start_t = datetime.strptime(row[7], "%H:%M")
     if datetime.strptime(time_str, "%H:%M") <= break_start_t:
@@ -506,7 +515,7 @@ def flag_forgot_clockout():
     ss = get_spreadsheet()
     ws = ss.worksheet("打刻記録")
     all_vals = ws.get_all_values()
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = _now().strftime("%Y-%m-%d")
     flagged = []
 
     for i, row in enumerate(all_vals):
@@ -517,7 +526,7 @@ def flag_forgot_clockout():
             store_name = config.STORE_NAMES.get(row[3], row[3])
             try:
                 cin = datetime.strptime(row[5], "%H:%M")
-                now = datetime.now()
+                now = _now()
                 elapsed = now - now.replace(hour=cin.hour, minute=cin.minute, second=0, microsecond=0)
                 hours_str = str(int(elapsed.total_seconds() // 3600))
             except Exception:
@@ -611,7 +620,7 @@ def update_record(row_num, clock_in=None, clock_out=None, break_start_t=None, br
             pass
 
     if cells:
-        ws.update_cells(cells)
+        ws.update_cells(cells, value_input_option='RAW')
     clear_today_cache()
     return None  # エラーなし
 
@@ -638,11 +647,11 @@ def add_manual_record(eid, emp_name, store_id, date, clock_in, clock_out, break_
             pass
 
     ws.append_row([
-        datetime.now().strftime("%Y%m%d%H%M%S"),
+        _now().strftime("%Y%m%d%H%M%S"),
         str(eid), emp_name, store_id, date,
         clock_in, clock_out, break_s, break_e,
         work_h, break_h, "",
-    ])
+    ], value_input_option='RAW')
     clear_today_cache()
 
 
@@ -731,7 +740,7 @@ def get_store_dashboard():
                 info["shift_num"] = shift_num
                 try:
                     cin = datetime.strptime(last["出勤"], "%H:%M")
-                    now = datetime.now()
+                    now = _now()
                     delta = now - now.replace(hour=cin.hour, minute=cin.minute, second=0, microsecond=0)
                     h = int(delta.total_seconds() // 3600)
                     m = int((delta.total_seconds() % 3600) // 60)
@@ -921,7 +930,7 @@ def is_first_punch(eid):
 def create_backup():
     client = get_client()
     ss = get_spreadsheet()
-    today = datetime.now().strftime("%Y%m%d")
+    today = _now().strftime("%Y%m%d")
     backup_name = f"{config.SPREADSHEET_NAME}_backup_{today}"
     try:
         client.list_spreadsheet_files()
@@ -936,7 +945,7 @@ def cleanup_old_backups():
     try:
         all_files = client.list_spreadsheet_files()
         prefix = f"{config.SPREADSHEET_NAME}_backup_"
-        cutoff = datetime.now()
+        cutoff = _now()
         for f in all_files:
             if f["name"].startswith(prefix):
                 try:

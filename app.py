@@ -9,9 +9,16 @@ from datetime import datetime
 import csv
 import io
 from urllib.parse import quote
+import pytz
 import config
 import sheets_manager
 import line_notifier
+
+_JST = pytz.timezone(config.TIMEZONE)
+
+
+def _jst_now():
+    return datetime.now(_JST)
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
@@ -27,7 +34,7 @@ _webhook_received_ids = []  # [{"user_id": "Uxxx", "timestamp": "2026-04-13 10:0
 
 def _is_late_night():
     """現在がAM2-5時かチェック"""
-    h = datetime.now().hour
+    h = _jst_now().hour
     return 2 <= h < 5
 
 
@@ -37,7 +44,7 @@ def _store_session_valid():
     auth_date = session.get("store_auth_date")
     if not auth_date:
         return False
-    now = datetime.now()
+    now = _jst_now()
     today = now.strftime("%Y-%m-%d")
     if now.hour < config.SESSION_RESET_HOUR:
         return auth_date == today
@@ -94,7 +101,7 @@ def store_password(store_id):
         pw = request.form.get("password", "")
         if pw == config.STORE_PASSWORDS[store_id]:
             session["store_id"] = store_id
-            session["store_auth_date"] = datetime.now().strftime("%Y-%m-%d")
+            session["store_auth_date"] = _jst_now().strftime("%Y-%m-%d")
             return redirect(url_for("employee_select"))
         flash("パスワードが正しくありません", "error")
 
@@ -535,7 +542,7 @@ def admin_resolve_alert(row_num):
 @app.route("/admin/report")
 @admin_required
 def admin_report():
-    now = datetime.now()
+    now = _jst_now()
     year = int(request.args.get("year", now.year))
     month = int(request.args.get("month", now.month))
     store_filter = request.args.get("store", "all")
@@ -562,7 +569,7 @@ def admin_report():
 @app.route("/admin/report/csv")
 @admin_required
 def admin_report_csv():
-    now = datetime.now()
+    now = _jst_now()
     year = int(request.args.get("year", now.year))
     month = int(request.args.get("month", now.month))
     store_filter = request.args.get("store", "all")
@@ -598,7 +605,7 @@ def admin_report_csv():
 @app.route("/admin/report/mf-csv")
 @admin_required
 def admin_mf_csv():
-    now = datetime.now()
+    now = _jst_now()
     year = int(request.args.get("year", now.year))
     month = int(request.args.get("month", now.month))
     store_filter = request.args.get("store", "all")
@@ -671,7 +678,7 @@ def line_webhook():
             _webhook_received_ids.append({
                 "user_id": uid,
                 "display_name": display_name,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "timestamp": _jst_now().strftime("%Y-%m-%d %H:%M:%S"),
             })
             print(f"[LINE Webhook] User ID取得: {uid} ({display_name})")
 
