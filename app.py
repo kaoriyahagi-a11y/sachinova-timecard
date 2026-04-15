@@ -102,6 +102,17 @@ def store_password(store_id):
     return render_template("store_password.html", store_id=store_id, store_name=store_name)
 
 
+@app.route("/store/change")
+def store_change():
+    """店舗切り替え — セッションをリセットして店舗選択に戻る"""
+    session.pop("store_id", None)
+    session.pop("store_auth_date", None)
+    session.pop("punch_eid", None)
+    session.pop("punch_name", None)
+    session.pop("punch_store", None)
+    return redirect(url_for("store_select"))
+
+
 # --- 従業員タイル ---
 
 @app.route("/select")
@@ -628,7 +639,7 @@ def admin_mf_csv():
 def line_webhook():
     """LINE Webhook：User ID取得用"""
     try:
-        body = request.get_json(force=True)
+        body = request.get_json(silent=True) or {}
         events = body.get("events", [])
         for ev in events:
             uid = ev.get("source", {}).get("userId")

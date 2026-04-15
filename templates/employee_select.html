@@ -12,7 +12,10 @@
             <small>Sachinova株式会社</small>
             {{ store_name }}
         </div>
-        <div class="clock" id="header-clock">--:--</div>
+        <div style="display:flex;align-items:center;gap:0.8rem">
+            <div class="clock" id="header-clock">--:--</div>
+            <a href="{{ url_for('store_change') }}" style="color:rgba(255,255,255,0.8);text-decoration:none;font-size:0.8rem;background:rgba(255,255,255,0.15);padding:0.3rem 0.8rem;border-radius:6px">店舗切替</a>
+        </div>
     </div>
 
     <div class="employee-grid">
