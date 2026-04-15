@@ -472,14 +472,17 @@ def admin_records(eid):
 @app.route("/admin/records/<eid>/edit/<int:row_num>", methods=["POST"])
 @admin_required
 def admin_edit_record(eid, row_num):
-    sheets_manager.update_record(
+    error = sheets_manager.update_record(
         row_num,
         clock_in=request.form.get("clock_in", "").strip() or None,
         clock_out=request.form.get("clock_out", "").strip() or None,
         break_start_t=request.form.get("break_start", "").strip() or None,
         break_end_t=request.form.get("break_end", "").strip() or None,
     )
-    flash("打刻を修正しました", "success")
+    if error:
+        flash(error, "error")
+    else:
+        flash("打刻を修正しました", "success")
     return redirect(url_for("admin_records", eid=eid))
 
 

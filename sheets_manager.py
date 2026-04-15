@@ -414,13 +414,12 @@ def clock_in(eid, emp_name, store_id):
 
 
 def clock_out(eid):
-    """退勤打刻 — 休憩中は拒否"""
+    """退勤打刻 — 休憩中は拒否、出勤より前の時刻は拒否"""
     row_num, row, ws = _find_active_shift_row(eid)
     if not row_num:
         return None, "出勤中のシフトがありません", None
     if not row[5]:
         return None, "先に出勤打刻をしてください", None
-    # 休憩中チェック（バグ修正の核心）
     if row[7] and not row[8]:
         return None, "退勤する前に休憩終了を押してください", None
     if row[6]:
@@ -431,15 +430,21 @@ def clock_out(eid):
 
     clock_in_t = datetime.strptime(row[5], "%H:%M")
     clock_out_t = datetime.strptime(time_str, "%H:%M")
+
+    # 退勤が出勤より前になるケースを防止
+    if clock_out_t <= clock_in_t:
+        return None, f"退勤時刻（{time_str}）が出勤時刻（{row[5]}）より前です", None
+
     delta = clock_out_t - clock_in_t
 
     break_hours = 0.0
     if row[7] and row[8]:
         bs = datetime.strptime(row[7], "%H:%M")
         be = datetime.strptime(row[8], "%H:%M")
-        break_hours = (be - bs).total_seconds() / 3600
+        if be > bs:
+            break_hours = (be - bs).total_seconds() / 3600
 
-    work_hours = delta.total_seconds() / 3600 - break_hours
+    work_hours = max(0, delta.total_seconds() / 3600 - break_hours)
 
     cells = [
         gspread.Cell(row_num, 7, time_str),
@@ -452,7 +457,7 @@ def clock_out(eid):
 
 
 def break_start(eid):
-    """休憩開始 — 勤務中のみ可"""
+    """休憩開始 — 勤務中のみ可、出勤より前の時刻は拒否"""
     row_num, row, ws = _find_active_shift_row(eid)
     if not row_num:
         return None, "出勤中のシフトがありません"
@@ -464,13 +469,18 @@ def break_start(eid):
         return None, "既に休憩開始済みです"
 
     now = datetime.now()
-    ws.update_cell(row_num, 8, now.strftime("%H:%M"))
+    time_str = now.strftime("%H:%M")
+    clock_in_t = datetime.strptime(row[5], "%H:%M")
+    if datetime.strptime(time_str, "%H:%M") <= clock_in_t:
+        return None, f"休憩開始（{time_str}）が出勤時刻（{row[5]}）より前です"
+
+    ws.update_cell(row_num, 8, time_str)
     clear_today_cache()
-    return now.strftime("%H:%M"), None
+    return time_str, None
 
 
 def break_end(eid):
-    """休憩終了 — 休憩中のみ可"""
+    """休憩終了 — 休憩中のみ可、休憩開始より前の時刻は拒否"""
     row_num, row, ws = _find_active_shift_row(eid)
     if not row_num:
         return None, "出勤中のシフトがありません"
@@ -480,9 +490,14 @@ def break_end(eid):
         return None, "既に休憩終了済みです"
 
     now = datetime.now()
-    ws.update_cell(row_num, 9, now.strftime("%H:%M"))
+    time_str = now.strftime("%H:%M")
+    break_start_t = datetime.strptime(row[7], "%H:%M")
+    if datetime.strptime(time_str, "%H:%M") <= break_start_t:
+        return None, f"休憩終了（{time_str}）が休憩開始（{row[7]}）より前です"
+
+    ws.update_cell(row_num, 9, time_str)
     clear_today_cache()
-    return now.strftime("%H:%M"), None
+    return time_str, None
 
 
 # ━━━━━ 要確認フラグ ━━━━━
@@ -541,8 +556,35 @@ def resolve_flag(row_num):
 
 
 def update_record(row_num, clock_in=None, clock_out=None, break_start_t=None, break_end_t=None):
+    """管理者による打刻修正 — 時刻の前後関係をバリデーション"""
     ss = get_spreadsheet()
     ws = ss.worksheet("打刻記録")
+
+    row = ws.row_values(row_num)
+    cin = clock_in or (row[5] if len(row) > 5 else "")
+    cout = clock_out or (row[6] if len(row) > 6 else "")
+    bs = break_start_t or (row[7] if len(row) > 7 else "")
+    be = break_end_t or (row[8] if len(row) > 8 else "")
+
+    # 時刻バリデーション
+    try:
+        if cin and cout:
+            t_in = datetime.strptime(cin, "%H:%M")
+            t_out = datetime.strptime(cout, "%H:%M")
+            if t_out <= t_in:
+                return "退勤時刻は出勤時刻より後にしてください"
+        if cin and bs:
+            if datetime.strptime(bs, "%H:%M") <= datetime.strptime(cin, "%H:%M"):
+                return "休憩開始は出勤時刻より後にしてください"
+        if bs and be:
+            if datetime.strptime(be, "%H:%M") <= datetime.strptime(bs, "%H:%M"):
+                return "休憩終了は休憩開始より後にしてください"
+        if be and cout:
+            if datetime.strptime(cout, "%H:%M") < datetime.strptime(be, "%H:%M"):
+                return "退勤時刻は休憩終了より後にしてください"
+    except ValueError:
+        return "時刻の形式が正しくありません（HH:MM）"
+
     cells = []
     if clock_in is not None:
         cells.append(gspread.Cell(row_num, 6, clock_in))
@@ -552,12 +594,6 @@ def update_record(row_num, clock_in=None, clock_out=None, break_start_t=None, br
         cells.append(gspread.Cell(row_num, 8, break_start_t))
     if break_end_t is not None:
         cells.append(gspread.Cell(row_num, 9, break_end_t))
-
-    row = ws.row_values(row_num)
-    cin = clock_in or (row[5] if len(row) > 5 else "")
-    cout = clock_out or (row[6] if len(row) > 6 else "")
-    bs = break_start_t or (row[7] if len(row) > 7 else "")
-    be = break_end_t or (row[8] if len(row) > 8 else "")
 
     if cin and cout:
         try:
@@ -569,14 +605,15 @@ def update_record(row_num, clock_in=None, clock_out=None, break_start_t=None, br
                 t_bs = datetime.strptime(bs, "%H:%M")
                 t_be = datetime.strptime(be, "%H:%M")
                 brk = (t_be - t_bs).total_seconds() / 3600
-            cells.append(gspread.Cell(row_num, 10, f"{work - brk:.2f}"))
-            cells.append(gspread.Cell(row_num, 11, f"{brk:.2f}"))
+            cells.append(gspread.Cell(row_num, 10, f"{max(0, work - brk):.2f}"))
+            cells.append(gspread.Cell(row_num, 11, f"{max(0, brk):.2f}"))
         except Exception:
             pass
 
     if cells:
         ws.update_cells(cells)
     clear_today_cache()
+    return None  # エラーなし
 
 
 def add_manual_record(eid, emp_name, store_id, date, clock_in, clock_out, break_s, break_e):
